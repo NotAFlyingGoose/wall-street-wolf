@@ -2,3 +2,5 @@
 /.vscode
 
 .env
+response.json
+Cargo.lock

@@ -1,9 +1,13 @@
-use std::fs;
+use std::{fs, time::Duration};
 
 use futures::future::join_all;
 use itertools::Itertools;
 use lazy_static::lazy_static;
-use scraper::{ElementRef, Html, Selector};
+use num_decimal::Num;
+use scraper::{Html, Selector};
+use tokio::time::Instant;
+
+use crate::{backend::Backend, Symbol};
 
 const YAHOO_FINANCE: &str = "https://finance.yahoo.com/";
 const MARKET_WATCH: &str = "https://www.marketwatch.com/investing";
@@ -12,6 +16,48 @@ const INVESTOPEDIA_TOP_STOCKS: &str = "https://www.investopedia.com/top-stocks-j
 
 lazy_static! {
     static ref CLIENT: reqwest::Client = reqwest::Client::builder().build().unwrap();
+}
+
+pub(crate) async fn all_stocks_within_price_range(
+    backend: &dyn Backend,
+    price_range: std::ops::Range<Num>,
+) -> Vec<(Symbol, Num)> {
+    let all_assets = backend.all_active_assets().await;
+
+    let mut results = Vec::with_capacity(all_assets.len());
+
+    let mut last_sleep = Instant::now();
+
+    // we can't just call `get_latest_prices` with ALL the assets because the url will get too long
+    for (idx, assets) in all_assets.into_iter().chunks(1000).into_iter().enumerate() {
+        let latest_prices = backend
+            .all_latest_prices(assets.collect())
+            .await
+            .into_iter()
+            .filter(|(_, price)| price_range.contains(price));
+
+        results.extend(latest_prices);
+
+        if idx % 150 == 149 && last_sleep.elapsed().as_secs() < 60 {
+            tracing::debug!("sleeping for rate limit");
+            tokio::time::sleep(Duration::from_secs(60)).await;
+            last_sleep = Instant::now();
+        }
+    }
+
+    results.shrink_to_fit();
+
+    results
+}
+
+pub(crate) async fn all_top_stocks() -> Vec<Symbol> {
+    let (sp_500, top_stocks) = futures::join!(sp_500(), investopedia_top_stocks());
+    sp_500
+        .iter()
+        .chain(top_stocks.iter())
+        .unique()
+        .map(Symbol::from)
+        .collect()
 }
 
 pub(crate) async fn investopedia_top_stocks() -> Vec<String> {
@@ -30,14 +76,12 @@ pub(crate) async fn investopedia_top_stocks() -> Vec<String> {
     let sel = Selector::parse("tbody").unwrap();
 
     doc.select(&sel)
-        .map(|tbody| {
+        .flat_map(|tbody| {
             tbody.children().filter_map(|tr| {
                 tr.children()
-                    .skip(1)
-                    .next()? // <td>
+                    .nth(1)? // <td>
                     .children()
-                    .skip(1)
-                    .next()? // <a>
+                    .nth(1)? // <a>
                     .children()
                     .next()? // text
                     .value()
@@ -45,7 +89,6 @@ pub(crate) async fn investopedia_top_stocks() -> Vec<String> {
                     .map(|text| text.to_string())
             })
         })
-        .flatten()
         .unique()
         .collect()
 }
@@ -71,8 +114,7 @@ pub(crate) async fn sp_500() -> Vec<String> {
         .children()
         .filter_map(|tr| {
             tr.children()
-                .skip(5)
-                .next()? // <td>
+                .nth(5)? // <td>
                 .children()
                 .next()? // <a>
                 .children()
@@ -128,7 +170,7 @@ async fn scrape_article(link: &str) -> Option<(String, f32)> {
 
     let filename = format!(
         "news/{}.html",
-        link.split("/").last().unwrap().split("?").next().unwrap()
+        link.split('/').last().unwrap().split('?').next().unwrap()
     );
     let _ = fs::create_dir("news");
     tracing::info!("saving response in {}", filename);
@@ -159,8 +201,6 @@ async fn scrape_article(link: &str) -> Option<(String, f32)> {
 }
 
 mod tests {
-    use super::*;
-
     // #[tokio::test]
     // async fn sp_500_is_500() {
     //     let top = sp_500().await;
