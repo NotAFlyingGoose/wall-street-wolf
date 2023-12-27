@@ -58,13 +58,13 @@ impl LiveOrderWatcher {
         }
     }
 
-    pub(crate) async fn open_if_closed(&mut self, inner: Arc<LiveInner>) {
+    pub(crate) async fn open(&mut self, inner: Arc<LiveInner>) {
         if self.handle.is_finished() {
             *self = Self::new(inner).await;
         }
     }
 
-    pub(crate) async fn join(self) -> Result<(), tokio::task::JoinError> {
-        self.handle.await
+    pub(crate) async fn close(&mut self) {
+        self.handle.abort();
     }
 }

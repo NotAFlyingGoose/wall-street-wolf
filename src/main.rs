@@ -192,7 +192,7 @@ async fn main() {
     loop {
         match ticker.wait_for_open_or_tick(backend.as_ref()).await {
             MarketStatus::Open => {
-                backend.open_if_closed().await;
+                backend.open().await;
 
                 tracing::debug!("measuring trends...");
                 watch_all(

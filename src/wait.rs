@@ -86,13 +86,13 @@ impl Ticker {
         // we should only be here if the day ended
         assert!(!self.clock.open);
 
-        let next_open: DateTime<Local> = DateTime::from(self.clock.next_open);
-        let next_close: DateTime<Local> = DateTime::from(self.clock.next_close);
+        let next_open: DateTime<_> = self.clock.next_open.with_timezone(&chrono_tz::EST);
+        let next_close: DateTime<_> = self.clock.next_close.with_timezone(&chrono_tz::EST);
 
         tracing::info!(
             "Sleeping until the market opens on {} - {}",
-            next_open.format("%A %d/%m/%Y at %I:%M %P"),
-            next_close.format("%I:%M %P")
+            next_open.format("%A %d/%m/%Y at %I:%M %P EST"),
+            next_close.format("%I:%M %P EST")
         );
 
         tokio::time::sleep(

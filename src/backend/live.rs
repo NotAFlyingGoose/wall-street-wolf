@@ -194,12 +194,12 @@ impl Backend for LiveBackend {
         }
     }
 
-    async fn open_if_closed(&self) {
-        self.watcher
-            .lock()
-            .await
-            .open_if_closed(self.inner.clone())
-            .await
+    async fn open(&self) {
+        self.watcher.lock().await.open(self.inner.clone()).await;
+    }
+
+    async fn close(&self) {
+        self.watcher.lock().await.close().await;
     }
 
     fn account_data(&self) -> &AccountState {

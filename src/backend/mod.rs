@@ -53,7 +53,9 @@ pub(crate) trait Backend {
 
     async fn final_stats(&self) -> Stats;
 
-    async fn open_if_closed(&self);
+    async fn open(&self);
+
+    async fn close(&self);
 
     async fn sell_all_positions<F>(&self, filter: F)
     where

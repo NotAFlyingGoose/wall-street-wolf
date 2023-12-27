@@ -62,7 +62,9 @@ impl Backend for TestBackend {
         todo!()
     }
 
-    async fn open_if_closed(&self) {}
+    async fn open(&self) {}
+
+    async fn close(&self) {}
 
     fn account_data(&self) -> &AccountState {
         &self.account
